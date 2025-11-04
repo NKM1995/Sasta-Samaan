@@ -1,0 +1,39 @@
+const express = require('express');
+const fs = require('fs');
+const path = require('path');
+const router = express.Router();
+
+const { fetchBlinkitProducts } = require('../providers/blinkit');
+const { fetchSwiggyProducts } = require('../providers/swiggy');
+const { computeNormalized } = require('../utils/normalize');
+
+// optional dummy zepto provider until real API added
+const { fetchZeptoProducts } = require('../providers/zepto') || { fetchZeptoProducts: async () => [] };
+
+router.get('/', async (req, res) => {
+  try {
+    const category = req.query.category || 'grocery';
+    // simplified: merge local + providers
+    const local = JSON.parse(fs.readFileSync(path.join(__dirname,'..','products.json')));
+    const [z,b,s] = await Promise.all([
+      fetchZeptoProducts(category).catch(()=>[]),
+      fetchBlinkitProducts(category).catch(()=>[]),
+      fetchSwiggyProducts(category).catch(()=>[])
+    ]);
+    const merged = [...local, ...z, ...b, ...s].map(p=>{
+      const copy = {...p};
+      if (copy.normalized_price == null) {
+        const { normalized_price, normalized_unit } = computeNormalized(copy.price, copy.unit);
+        copy.normalized_price = normalized_price;
+        copy.normalized_unit = normalized_unit;
+      }
+      return copy;
+    });
+    res.json(merged);
+  } catch (err) {
+    console.error('products route err', err);
+    res.status(500).json({ error: 'server_error' });
+  }
+});
+
+module.exports = router;

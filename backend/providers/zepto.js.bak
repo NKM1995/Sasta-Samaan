@@ -1,0 +1,11 @@
+async function fetchZeptoProducts(category) {
+  await new Promise(r => setTimeout(r, 80));
+  return [
+    { listing_id: 301, product_id: 2, name: "Tata Salt 1 kg", brand: "Tata", category, provider: "Zepto", price: 31, unit: "1 kg", fetched_at: new Date().toISOString(), url: null },
+    { listing_id: 302, product_id: 4, name: "Daawat Jasmine Rice 5 kg", brand: "Daawat", category, provider: "Zepto", price: 500, unit: "5 kg", fetched_at: new Date().toISOString(), url: null },
+    { listing_id: 303, product_id: 3, name: "Parle-G Biscuit 400 g", brand: "Parle", category, provider: "Zepto", price: 49, unit: "400 g", fetched_at: new Date().toISOString(), url: null },
+    { listing_id: 304, product_id: 1, name: "Aashirvaad Atta 5 kg", brand: "Aashirvaad", category, provider: "Zepto", price: 397, unit: "5 kg", fetched_at: new Date().toISOString(), url: null }
+  ];
+}
+
+module.exports = { fetchZeptoProducts };

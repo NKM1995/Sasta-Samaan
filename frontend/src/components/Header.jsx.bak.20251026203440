@@ -1,0 +1,18 @@
+import React from 'react';
+import { Link } from 'react-router-dom';
+import './Header.css'; // no-op if file missing, still fine
+
+export default function Header() {
+  return (
+    <header className="app-header">
+      <div className="app-container" style={{display:'flex',alignItems:'center',gap:12,justifyContent:'space-between'}}>
+        <div className="brand">Sasta-Samaan</div>
+        <nav>
+          <Link to="/">Home</Link>
+          <Link to="/compare">Compare</Link>
+          <Link to="/admin">Admin</Link>
+        </nav>
+      </div>
+    </header>
+  );
+}

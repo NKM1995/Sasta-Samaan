@@ -1,0 +1,83 @@
+import React, { useState } from 'react';
+import { addToCart, loadCarts } from '../utils/cartUtils';
+
+/**
+ * ProductCard expects:
+ * product = {
+ *   product_id, name, brand, unit, listings: [{ provider, price, listing_id, link, normalized_price }]
+ * }
+ *
+ * Shows each provider row with Add-to-Cart button.
+ */
+
+export default function ProductCard({ product }) {
+  const [addedMap, setAddedMap] = useState(() => {
+    const carts = loadCarts();
+    const map = {};
+    (Object.keys(carts)).forEach(k => { (carts[k] || []).forEach(item => { if (String(item.product_id) === String(product.product_id)) map[k] = true; }); });
+    return map;
+  });
+
+  function handleAdd(listing) {
+    const providerKey = listing.provider.toLowerCase().replace(/\s+/g,'');
+    const item = {
+      product_id: product.product_id || product.name,
+      name: product.name,
+      price: listing.price,
+      provider: listing.provider,
+      link: listing.link || listing.raw && listing.raw.url || '#'
+    };
+    addToCart(providerKey, item);
+    setAddedMap(prev => ({ ...prev, [providerKey]: true }));
+    // dispatch global event so header/cart count can update if listening
+    try { window.dispatchEvent(new CustomEvent('sasta:cart:changed')); } catch(e) {}
+  }
+
+  const cheapest = (product.listings || []).reduce((min, l) => (!min || l.price < min.price ? l : min), null);
+
+  return (
+    <div className="card" style={{padding:12}}>
+      <div style={{display:'flex', justifyContent:'space-between', gap:12}}>
+        <div style={{flex:1}}>
+          <div className="title">{product.name}</div>
+          <div className="meta">{product.brand} • {product.unit}</div>
+        </div>
+        <div style={{textAlign:'right'}}>
+          <div style={{fontSize:12, color:'#888'}}>Cheapest</div>
+          <div style={{fontWeight:700}}>{cheapest ? `${cheapest.provider} ₹${cheapest.price}` : '—'}</div>
+        </div>
+      </div>
+
+      <div style={{marginTop:10}}>
+        {(product.listings || []).map(listing => {
+          const providerKey = listing.provider.toLowerCase().replace(/\s+/g,'');
+          const isAdded = !!addedMap[providerKey];
+          return (
+            <div key={listing.provider} style={{display:'flex', justifyContent:'space-between', alignItems:'center', padding:'6px 0', borderBottom:'1px dashed #f0f0f0'}}>
+              <div>
+                <div style={{fontSize:14}}>{listing.provider} — ₹{listing.price}</div>
+                {listing.normalized_price ? <div style={{fontSize:12,color:'#0b69ff'}}>₹{listing.normalized_price} / {listing.normalized_unit === 'per_100g' ? '100g' : '100ml'}</div> : null}
+              </div>
+              <div>
+                <button
+                  onClick={() => handleAdd(listing)}
+                  disabled={isAdded}
+                  style={{
+                    background: isAdded ? '#777' : '#007bff',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius:6,
+                    padding: '6px 10px',
+                    cursor: isAdded ? 'default' : 'pointer'
+                  }}
+                >
+                  {isAdded ? 'Added ✓' : 'Add to Cart'}
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}

@@ -1,0 +1,58 @@
+import React, { useEffect, useState } from 'react';
+
+const COMPARE_KEY = 'sasta_compare_listings';
+function loadCompare() {
+  try { return JSON.parse(localStorage.getItem(COMPARE_KEY) || '[]').map(String); }
+  catch (e) { return []; }
+}
+function saveCompare(arr) { localStorage.setItem(COMPARE_KEY, JSON.stringify(arr.map(String))); }
+
+export default function ProductCard({ p }) {
+  const id = p.listing_id ?? p.id ?? p.product_id ?? p.name;
+  const idStr = String(id);
+
+  const [inCompare, setInCompare] = useState(false);
+
+  useEffect(() => {
+    const cur = loadCompare();
+    setInCompare(cur.includes(idStr));
+  }, [idStr]);
+
+  function toggleCompare(e) {
+    e && e.stopPropagation();
+    const cur = loadCompare();
+    const exists = cur.includes(idStr);
+    const next = exists ? cur.filter(x => x !== idStr) : [...cur, idStr];
+    saveCompare(next);
+    setInCompare(!exists);
+    try { window.dispatchEvent(new CustomEvent('sasta:compare:changed', { detail: { count: next.length } })); } catch(e){ }
+  }
+
+  return (
+    <div className="card" role="article" style={{cursor:'pointer'}}>
+      <div className="compare">
+        <label style={{display:'inline-flex',alignItems:'center',gap:6,cursor:'pointer'}}>
+          <input type="checkbox" checked={inCompare} onChange={toggleCompare} />
+          <span style={{fontSize:12}}>{inCompare ? 'Compare ✓' : 'Compare'}</span>
+        </label>
+      </div>
+
+      <div>
+        <div className="title">{p.name}</div>
+        <div className="meta">{p.brand} • {p.unit}</div>
+      </div>
+
+      <div style={{flex:1}} />
+
+      <div className="price-row">
+        <div className="price">₹{p.price}</div>
+        <div style={{textAlign:'right'}}>
+          <div style={{fontSize:12,color:'#888'}}>Provider</div>
+          <div style={{fontSize:13,color:'#444'}}>{p.provider}</div>
+        </div>
+      </div>
+
+      {p.normalized_price ? <div className="norm">₹{p.normalized_price} / {p.normalized_unit === 'per_100g' ? '100g' : '100ml'}</div> : null}
+    </div>
+  );
+}

@@ -1,0 +1,91 @@
+import React, { useState } from 'react';
+import { addToCart, loadCarts, removeFromCart } from '../utils/cartUtils';
+import { canonicalKey, displayName } from '../utils/providerUtils';
+
+/**
+ * ProductCard uses canonicalKey/displayName for provider handling.
+ * window.sastaUndo calls removeFromCart (imported) instead of using require().
+ */
+
+export default function ProductCard({ product }) {
+  const [addedMap, setAddedMap] = useState(() => {
+    const carts = loadCarts();
+    const map = {};
+    Object.keys(carts).forEach(k => { (carts[k] || []).forEach(item => {
+      if (String(item.product_id) === String(product.product_id || product.name)) map[k] = true;
+    }); });
+    return map;
+  });
+
+  const listings = (product.listings || []).slice();
+  // compute cheapest by numeric price
+  let cheapest = null;
+  listings.forEach(l => {
+    const p = Number(l.price);
+    if (!isNaN(p) && (cheapest === null || p < Number(cheapest.price))) cheapest = l;
+  });
+
+  function handleAdd(listing) {
+    const key = canonicalKey(listing.provider);
+    const item = {
+      product_id: product.product_id || product.name,
+      name: product.name,
+      price: listing.price,
+      provider: displayName(listing.provider),
+      link: listing.link || (listing.raw && listing.raw.url) || '#',
+    };
+    addToCart(key, item);
+    setAddedMap(prev => ({ ...prev, [key]: true }));
+    try { window.dispatchEvent(new CustomEvent('sasta:cart:changed')); } catch(e) {}
+    try { window.dispatchEvent(new CustomEvent('sasta:toast', { detail: { message: `${product.name} added to ${displayName(listing.provider)} cart`, actionText: 'Undo', payload: { providerKey: key, product_id: item.product_id } } })); } catch(e){}
+    // register undo handler that calls imported removeFromCart
+    window.sastaUndo = function(payload) {
+      try {
+        removeFromCart(payload.providerKey, payload.product_id);
+        window.dispatchEvent(new CustomEvent('sasta:cart:changed'));
+      } catch (e) { console.warn('undo failed', e); }
+    };
+  }
+
+  return (
+    <article className="card" aria-label={product.name}>
+      <div>
+        <div className="title">{product.name}</div>
+        <div className="meta">{product.brand}{product.unit ? ` • ${product.unit}` : ''}</div>
+      </div>
+
+      <div style={{ marginTop: 10 }}>
+        {listings.map(listing => {
+          const isCheapest = cheapest && String(listing.provider).toLowerCase().includes(String(cheapest.provider).toLowerCase()) && Number(listing.price) === Number(cheapest.price);
+          const key = canonicalKey(listing.provider);
+          const isAdded = !!addedMap[key];
+          return (
+            <div key={String(listing.listing_id || listing.provider)} className={`provider-row ${isCheapest ? 'cheapest' : ''}`}>
+              <div className="provider-left">
+                <div className="provider-name">{displayName(listing.provider)}</div>
+                <div className="provider-meta">{listing.unit ? `${listing.unit} • ` : ''}{listing.fetched_at ? new Date(listing.fetched_at).toLocaleDateString() : ''}</div>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div style={{ textAlign: 'right', minWidth: 72 }}>
+                  <div className="provider-price">₹{listing.price}</div>
+                  {listing.normalized_price ? <div style={{ fontSize: 12, color: 'var(--accent)' }}>₹{listing.normalized_price} / {listing.normalized_unit === 'per_100g' ? '100g' : '100ml'}</div> : null}
+                </div>
+
+                <button
+                  className="cart-btn"
+                  disabled={isAdded}
+                  title={isAdded ? 'Already in cart' : `Add to ${displayName(listing.provider)} cart`}
+                  aria-label={isAdded ? 'Already in cart' : `Add to ${displayName(listing.provider)} cart`}
+                  onClick={() => handleAdd(listing)}
+                >
+                  🛒
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </article>
+  );
+}

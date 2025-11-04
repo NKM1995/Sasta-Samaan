@@ -1,0 +1,91 @@
+/**
+ * backend/admin_routes.js
+ * Small admin API:
+ *  - GET  /admin/unmapped      -> listings where normalized_price IS NULL
+ *  - GET  /admin/unmapped/count-> count of unmapped rows
+ *  - POST /admin/map           -> map/fix a listing (set product_id, normalized_price, normalized_unit)
+ *
+ * WHY:
+ *  - Provide a safe API to fetch rows needing manual attention and apply fixes.
+ */
+
+const express = require('express');
+const router = express.Router();
+const db = require('./db');
+
+// GET /admin/unmapped
+router.get('/unmapped', (req, res) => {
+  try {
+    const rows = db.prepare(`
+      SELECT listings.id AS listing_id, listings.product_id, listings.raw_name, listings.provider, listings.unit, listings.price, listings.fetched_at, listings.url
+      FROM listings
+      WHERE normalized_price IS NULL OR normalized_price = ''
+      ORDER BY listings.fetched_at DESC
+      LIMIT 200
+    `).all();
+    res.json(rows);
+  } catch (err) {
+    console.error('GET /admin/unmapped error', err);
+    res.status(500).json({ error: 'db_error' });
+  }
+});
+
+// GET /admin/unmapped/count
+router.get('/unmapped/count', (req, res) => {
+  try {
+    const row = db.prepare("SELECT COUNT(*) AS cnt FROM listings WHERE normalized_price IS NULL OR normalized_price = ''").get();
+    res.json({ count: row.cnt });
+  } catch (err) {
+    console.error('GET /admin/unmapped/count error', err);
+    res.status(500).json({ error: 'db_error' });
+  }
+});
+
+/**
+ * POST /admin/map
+ * Body JSON:
+ *  {
+ *    listing_id: number (required),
+ *    product_id: number|null (optional) - if null, leave product_id unchanged,
+ *    normalized_price: number|null (optional),
+ *    normalized_unit: string|null (optional)  // 'per_100g' or 'per_100ml'
+ *  }
+ *
+ * WHY: allow manual fixes to listing mapping/normalization without touching DB directly.
+ */
+router.post('/map', (req, res) => {
+  try {
+    const { listing_id, product_id, normalized_price, normalized_unit } = req.body || {};
+    if (!listing_id) return res.status(400).json({ error: 'listing_id_required' });
+
+    const parts = [];
+    const params = { id: listing_id };
+    if (product_id !== undefined) {
+      parts.push('product_id = @product_id');
+      params.product_id = product_id;
+    }
+    if (normalized_price !== undefined) {
+      parts.push('normalized_price = @normalized_price');
+      params.normalized_price = normalized_price;
+    }
+    if (normalized_unit !== undefined) {
+      parts.push('normalized_unit = @normalized_unit');
+      params.normalized_unit = normalized_unit;
+    }
+
+    if (parts.length === 0) {
+      return res.status(400).json({ error: 'nothing_to_update' });
+    }
+
+    const sql = `UPDATE listings SET ${parts.join(', ')} WHERE id = @id`;
+    db.prepare(sql).run(params);
+
+    const updated = db.prepare('SELECT * FROM listings WHERE id = @id').get({ id: listing_id });
+    res.json({ success: true, updated });
+  } catch (err) {
+    console.error('POST /admin/map error', err);
+    res.status(500).json({ error: 'db_error' });
+  }
+});
+
+module.exports = router;

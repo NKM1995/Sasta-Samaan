@@ -1,0 +1,25 @@
+import React from 'react';
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import Header from './components/Header';
+import Home from './pages/Home';
+import ProductDetail from './pages/ProductDetail';
+import AdminPanel from './pages/AdminPanel';
+import CartsPage from './pages/CartsPage';
+import Snackbar from './components/Snackbar';
+
+export default function App() {
+  return (
+    <BrowserRouter>
+      <Header />
+      <div className="app-container" style={{ paddingTop: 16 }}>
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route path="/product/:id" element={<ProductDetail />} />
+          <Route path="/carts" element={<CartsPage />} />
+          <Route path="/admin" element={<AdminPanel />} />
+        </Routes>
+      </div>
+      <Snackbar />
+    </BrowserRouter>
+  );
+}

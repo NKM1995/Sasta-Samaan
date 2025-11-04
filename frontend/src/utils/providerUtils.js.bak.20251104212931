@@ -1,0 +1,63 @@
+/**
+ * src/utils/providerUtils.js
+ *
+ * Central provider canonicalization:
+ * - canonicalKey(providerName) -> stable key used for carts and grouping (lowercase, no spaces)
+ * - displayName(providerName) -> friendly label to show in UI
+ *
+ * Extend mappings as you discover more variants.
+ */
+
+const canonicalMap = {
+  // map many forms -> canonical key
+  'swiggy instamart': 'instamart',
+  'swiggyinstamart': 'instamart',
+  'instamart': 'instamart',
+  'swiggy': 'swiggy',
+  'zepto': 'zepto',
+  'blinkit': 'blinkit',
+  'bigbasket': 'bigbasket',
+  'jiomart': 'jiomart',
+  'dmart': 'dmart'
+};
+
+// friendly display names for canonical keys
+const displayMap = {
+  instamart: 'Instamart',
+  swiggy: 'Swiggy',
+  zepto: 'Zepto',
+  blinkit: 'Blinkit',
+  bigbasket: 'BigBasket',
+  jiomart: 'JioMart',
+  dmart: 'Dmart'
+};
+
+function normalizeRaw(name = '') {
+  return (name || '').toString().trim().toLowerCase().replace(/[\u2018\u2019\u201c\u201d"]/g, '').replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function canonicalKey(providerName = '') {
+  const n = normalizeRaw(providerName);
+  // try direct map
+  if (canonicalMap[n]) return canonicalMap[n];
+  // fallback: remove spaces
+  const compact = n.replace(/\s+/g, '');
+  if (canonicalMap[compact]) return canonicalMap[compact];
+  // try substring heuristics
+  if (n.indexOf('instamart') !== -1) return 'instamart';
+  if (n.indexOf('swiggy') !== -1) return 'swiggy';
+  if (n.indexOf('blinkit') !== -1) return 'blinkit';
+  if (n.indexOf('bigbasket') !== -1 || n.indexOf('bb') === 0) return 'bigbasket';
+  if (n.indexOf('jiomart') !== -1) return 'jiomart';
+  if (n.indexOf('dmart') !== -1) return 'dmart';
+  if (n.indexOf('zepto') !== -1) return 'zepto';
+  // default: compacted provider name
+  return compact || n || 'unknown';
+}
+
+function displayName(providerName = '') {
+  const key = canonicalKey(providerName);
+  return displayMap[key] || providerName || key;
+}
+
+module.exports = { canonicalKey, displayName };

@@ -1,0 +1,11 @@
+async function fetchBlinkitProducts(category) {
+  await new Promise(r => setTimeout(r, 100));
+  return [
+    { listing_id: 101, product_id: 1, name: "Aashirvaad Atta 5 kg", brand: "Aashirvaad", category, provider: "Blinkit", price: 395, unit: "5 kg", fetched_at: new Date().toISOString(), url: null },
+    { listing_id: 102, product_id: 2, name: "Tata Salt 1 kg", brand: "Tata", category, provider: "Blinkit", price: 32, unit: "1 kg", fetched_at: new Date().toISOString(), url: null },
+    { listing_id: 103, product_id: 3, name: "Parle-G Biscuit 400 g", brand: "Parle", category, provider: "Blinkit", price: 51, unit: "400 g", fetched_at: new Date().toISOString(), url: null },
+    { listing_id: 104, product_id: 4, name: "Daawat Jasmine Rice 5 kg", brand: "Daawat", category, provider: "Blinkit", price: 502, unit: "5 kg", fetched_at: new Date().toISOString(), url: null }
+  ];
+}
+
+module.exports = { fetchBlinkitProducts };

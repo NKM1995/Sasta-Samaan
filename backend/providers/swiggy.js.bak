@@ -1,0 +1,28 @@
+/**
+ * providers/swiggy.js — simulated Swiggy Instamart data
+ */
+async function fetchSwiggyProducts(category = 'grocery') {
+  return [
+    {
+      name: "Daawat Jasmine Rice 5 kg",
+      brand: "Daawat",
+      category,
+      provider: "Swiggy Instamart",
+      price: 499,
+      unit: "5 kg",
+      fetched_at: new Date().toISOString(),
+      url: null
+    },
+    {
+      name: "Tata Salt 1 kg",
+      brand: "Tata",
+      category,
+      provider: "Swiggy Instamart",
+      price: 32,
+      unit: "1 kg",
+      fetched_at: new Date().toISOString(),
+      url: null
+    }
+  ];
+}
+module.exports = { fetchSwiggyProducts };

@@ -1,0 +1,87 @@
+import React, { useEffect, useState } from 'react';
+import api from '../api';
+import ProductCard from '../components/ProductCard';
+import SearchBar from '../components/SearchBar';
+
+/**
+ * Home.jsx
+ * - fetches flat product listings from /products (each listing = provider-specific)
+ * - groups by product name (case-insensitive) into a single "product" object with `listings`
+ */
+export default function Home() {
+  const [q, setQ] = useState('');
+  const [provider, setProvider] = useState('');
+  const [products, setProducts] = useState([]);
+  const [grouped, setGrouped] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  async function fetchProducts() {
+    setLoading(true);
+    try {
+      const params = {};
+      if (q) params.q = q;
+      if (provider) params.provider = provider;
+      const res = await api.get('/products', { params });
+      const flat = Array.isArray(res.data) ? res.data : [];
+      setProducts(flat);
+      // group by normalized name (fallback to product_id if name absent)
+      const groups = {};
+      flat.forEach(item => {
+        const key = (item.product_id ? String(item.product_id) : (item.name || '')).toString().trim().toLowerCase();
+        if (!groups[key]) {
+          groups[key] = {
+            product_id: item.product_id || null,
+            name: item.name || (item.raw_name || 'Unknown'),
+            brand: item.brand || '',
+            unit: item.unit || '',
+            listings: []
+          };
+        }
+        groups[key].listings.push({
+          listing_id: item.listing_id ?? item.id ?? null,
+          provider: item.provider || 'Unknown',
+          price: item.price,
+          unit: item.unit,
+          normalized_price: item.normalized_price ?? null,
+          normalized_unit: item.normalized_unit ?? null,
+          fetched_at: item.fetched_at ?? null,
+          link: item.url ?? null,
+          raw: item
+        });
+      });
+      setGrouped(Object.values(groups));
+    } catch (e) {
+      console.error('fetchProducts', e);
+      setProducts([]);
+      setGrouped([]);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => { fetchProducts(); }, []);
+
+  return (
+    <div>
+      <div style={{padding:20}}>
+        <h1>Sasta-Samaan</h1>
+        <div style={{display:'flex', gap:12, marginBottom:12}}>
+          <div style={{flex:1}}><SearchBar value={q} onChange={setQ} onEnter={fetchProducts} /></div>
+          <select value={provider} onChange={e=>setProvider(e.target.value)}>
+            <option value="">All Providers</option>
+            <option value="Zepto">Zepto</option>
+            <option value="Blinkit">Blinkit</option>
+            <option value="Swiggy Instamart">Swiggy Instamart</option>
+          </select>
+          <button onClick={fetchProducts}>Apply</button>
+        </div>
+
+        {loading ? <div>Loading...</div> : (
+          <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(260px,1fr))', gap:14}}>
+            {grouped.map(p => <ProductCard key={p.product_id || p.name} product={p} />)}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

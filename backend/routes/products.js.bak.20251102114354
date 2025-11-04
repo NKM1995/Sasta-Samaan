@@ -1,0 +1,68 @@
+/**
+ * routes/products.js
+ * - Aggregates results from multiple provider scraper adapters
+ * - Each adapter is wrapped with .catch(()=>[]) so failures don't break the route
+ * - Optionally compute normalized_price using existing utils if available
+ */
+
+const express = require('express');
+const router = express.Router();
+const fs = require('fs');
+const path = require('path');
+
+const { fetchZeptoProducts } = require('../providers/zepto_scraper');
+const { fetchBlinkitProducts } = require('../providers/blinkit_scraper');
+const { fetchInstamartProducts } = require('../providers/instamart_scraper');
+const { fetchBigBasketProducts } = require('../providers/bigbasket_scraper');
+const { fetchJiomartProducts } = require('../providers/jiomart_scraper');
+const { fetchDmartProducts } = require('../providers/dmart_scraper');
+
+// optional computeNormalized util: try to require if exists
+let computeNormalized = null;
+try { computeNormalized = require('../utils/compute_normalized_price').computeNormalized; } catch(e) { /* ignore */ }
+
+router.get('/', async (req, res) => {
+  try {
+    const category = req.query.category || 'grocery';
+    const adapters = [
+      fetchZeptoProducts,
+      fetchBlinkitProducts,
+      fetchInstamartProducts,
+      fetchBigBasketProducts,
+      fetchJiomartProducts,
+      fetchDmartProducts
+    ];
+
+    const results = await Promise.all(adapters.map(fn => {
+      try { return fn(category).catch(err => { console.warn('adapter error', err && err.message); return []; }); }
+      catch (e) { console.warn('adapter invocation failed', e && e.message); return Promise.resolve([]); }
+    }));
+
+    // merge and optionally normalise
+    const merged = results.flat().map(item => {
+      const copy = { ...item };
+      if (computeNormalized && (copy.normalized_price == null)) {
+        try {
+          const n = computeNormalized(copy.price, copy.unit);
+          copy.normalized_price = n.normalized_price;
+          copy.normalized_unit = n.normalized_unit;
+        } catch (e) { /* ignore */ }
+      }
+      return copy;
+    });
+
+    // also include any local products.json entries (optional)
+    try {
+      const local = JSON.parse(fs.readFileSync(path.join(__dirname,'..','products.json')));
+      // merge local as-is (you may want dedup rules)
+      res.json([...local, ...merged]);
+    } catch (e) {
+      res.json(merged);
+    }
+  } catch (err) {
+    console.error('products route err', err && err.message);
+    res.status(500).json({ error: 'server_error' });
+  }
+});
+
+module.exports = router;

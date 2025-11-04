@@ -1,0 +1,69 @@
+/**
+ * src/utils/cartUtils.js
+ * Simple localStorage-based carts: one cart per provider.
+ *
+ * Data shape in localStorage (key: sasta_provider_carts):
+ * {
+ *   "zepto": [{ product_id, name, price, qty, provider, link }],
+ *   "blinkit": [...],
+ *   "instamart": [...]
+ * }
+ */
+
+const CART_KEY = 'sasta_provider_carts';
+
+function defaultCarts() {
+  return { zepto: [], blinkit: [], instamart: [] };
+}
+
+export function loadCarts() {
+  try {
+    const raw = localStorage.getItem(CART_KEY);
+    if (!raw) return defaultCarts();
+    const parsed = JSON.parse(raw);
+    // ensure expected buckets exist
+    return { ...defaultCarts(), ...parsed };
+  } catch (e) {
+    console.warn('loadCarts error', e);
+    return defaultCarts();
+  }
+}
+
+export function saveCarts(carts) {
+  try {
+    localStorage.setItem(CART_KEY, JSON.stringify(carts));
+  } catch (e) {
+    console.warn('saveCarts error', e);
+  }
+}
+
+export function addToCart(providerKey, product) {
+  const key = providerKey.toLowerCase();
+  const carts = loadCarts();
+  const cart = carts[key] || [];
+  const existing = cart.find(p => String(p.product_id) === String(product.product_id));
+  if (!existing) {
+    cart.push({ ...product, qty: 1 });
+  } else {
+    existing.qty = (existing.qty || 1) + 1;
+  }
+  carts[key] = cart;
+  saveCarts(carts);
+  return carts;
+}
+
+export function removeFromCart(providerKey, product_id) {
+  const key = providerKey.toLowerCase();
+  const carts = loadCarts();
+  carts[key] = (carts[key] || []).filter(p => String(p.product_id) !== String(product_id));
+  saveCarts(carts);
+  return carts;
+}
+
+export function clearCart(providerKey) {
+  const key = providerKey.toLowerCase();
+  const carts = loadCarts();
+  carts[key] = [];
+  saveCarts(carts);
+  return carts;
+}

@@ -1,0 +1,68 @@
+[
+  {
+    "listing_id": 301,
+    "product_id": 1,
+    "name": "Aashirvaad Atta 5 kg",
+    "brand": "Aashirvaad",
+    "provider": "Zepto",
+    "price": 397,
+    "unit": "5 kg",
+    "fetched_at": "2025-10-28T13:42:23.847Z",
+    "url": null
+  },
+  {
+    "listing_id": 303,
+    "product_id": 3,
+    "name": "Parle-G Biscuit 400 g",
+    "brand": "Parle",
+    "provider": "Zepto",
+    "price": 49,
+    "unit": "400 g",
+    "fetched_at": "2025-10-28T13:42:23.852Z",
+    "url": null
+  },
+  {
+    "listing_id": 101,
+    "product_id": 1,
+    "name": "Aashirvaad Atta 5 kg",
+    "brand": "Aashirvaad",
+    "provider": "Blinkit",
+    "price": 395,
+    "unit": "5 kg",
+    "fetched_at": "2025-10-28T13:42:23.866Z",
+    "url": null
+  },
+  {
+    "listing_id": 103,
+    "product_id": 3,
+    "name": "Parle-G Biscuit 400 g",
+    "brand": "Parle",
+    "provider": "Blinkit",
+    "price": 51,
+    "unit": "400 g",
+    "fetched_at": "2025-10-28T13:42:23.866Z",
+    "url": null
+  },
+  {
+    "listing_id": 201,
+    "product_id": 2,
+    "name": "Tata Salt 1 kg",
+    "brand": "Tata",
+    "provider": "Swiggy Instamart",
+    "price": 31,
+    "unit": "1 kg",
+    "fetched_at": "2025-10-28T13:42:23.876Z",
+    "url": null
+  },
+  {
+    "listing_id": 204,
+    "product_id": 4,
+    "name": "Daawat Jasmine Rice 5 kg",
+    "brand": "Daawat",
+    "provider": "Swiggy Instamart",
+    "price": 501,
+    "unit": "5 kg",
+    "fetched_at": "2025-10-28T13:42:23.876Z",
+    "url": null
+  }
+]

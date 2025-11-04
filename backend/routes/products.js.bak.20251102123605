@@ -1,0 +1,71 @@
+/**
+ * routes/products.js (mocked providers)
+ * Aggregator that pulls from mocked provider adapters in providers/mocks/
+ */
+
+const express = require('express');
+const router = express.Router();
+const fs = require('fs');
+const path = require('path');
+
+const { fetchZeptoProducts } = require('../providers/mocks/zepto');
+const { fetchBlinkitProducts } = require('../providers/mocks/blinkit');
+const { fetchInstamartProducts } = require('../providers/mocks/instamart');
+const { fetchBigBasketProducts } = require('../providers/mocks/bigbasket');
+const { fetchJiomartProducts } = require('../providers/mocks/jiomart');
+const { fetchDmartProducts } = require('../providers/mocks/dmart');
+
+// optional computeNormalized util — keep safe require
+let computeNormalized = null;
+try { computeNormalized = require('../utils/compute_normalized_price').computeNormalized; } catch(e) { /* ignore */ }
+
+router.get('/', async (req, res) => {
+  try {
+    const category = (req.query.category || 'grocery');
+
+    const adapters = [
+      fetchZeptoProducts,
+      fetchBlinkitProducts,
+      fetchInstamartProducts,
+      fetchBigBasketProducts,
+      fetchJiomartProducts,
+      fetchDmartProducts
+    ];
+
+    const results = await Promise.all(adapters.map(fn => {
+      try { return fn(category).catch(err => { console.warn('adapter error', err && err.message); return []; }); }
+      catch(e){ console.warn('adapter invocation failed', e && e.message); return Promise.resolve([]); }
+    }));
+
+    let merged = results.flat().map(item => ({ ...item }));
+
+    // compute normalized prices if util present and missing
+    if (computeNormalized) {
+      merged = merged.map(it => {
+        try {
+          if (it.normalized_price == null) {
+            const n = computeNormalized(it.price, it.unit);
+            it.normalized_price = n.normalized_price;
+            it.normalized_unit = n.normalized_unit;
+          }
+        } catch (e) {}
+        return it;
+      });
+    }
+
+    // include local products.json but keep providers mixed (local first)
+    try {
+      const local = JSON.parse(fs.readFileSync(path.join(__dirname,'..','products.json')));
+      merged = [...local, ...merged];
+    } catch (e) {
+      // ignore
+    }
+
+    res.json(merged);
+  } catch (err) {
+    console.error('products route err', err && err.message);
+    res.status(500).json({ error: 'server_error' });
+  }
+});
+
+module.exports = router;

@@ -1,0 +1,37 @@
+import React, { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { loadCarts } from '../utils/cartUtils';
+
+export default function Header(){
+  const [counts, setCounts] = useState({});
+  function refresh(){
+    const carts = loadCarts();
+    const summary = {};
+    Object.keys(carts).forEach(k => summary[k] = (carts[k] || []).length);
+    setCounts(summary);
+  }
+  useEffect(()=>{
+    refresh();
+    const onChange = () => refresh();
+    window.addEventListener('sasta:cart:changed', onChange);
+    window.addEventListener('storage', onChange);
+    return ()=>{ window.removeEventListener('sasta:cart:changed', onChange); window.removeEventListener('storage', onChange); };
+  },[]);
+
+  const total = Object.values(counts).reduce((s,v)=> s + (v||0), 0);
+
+  return (
+    <header className="app-header">
+      <div className="app-header-inner app-container">
+        <Link to="/" className="brand">Sasta-Samaan</Link>
+
+        <nav className="nav" aria-label="Main">
+          {/* Removed Home link to reduce duplication; brand links home now */}
+          <Link to="/carts" aria-label="View carts">Carts{total>0?` (${total})`:''}</Link>
+          <div className="sep" aria-hidden />
+          <Link to="/admin" aria-label="Admin panel">Admin</Link>
+        </nav>
+      </div>
+    </header>
+  );
+}

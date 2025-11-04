@@ -1,0 +1,157 @@
+import React, { useEffect, useState } from 'react';
+import axios from 'axios';
+import Admin from './Admin';
+
+/**
+ * Frontend App — Sasta-Samaan MVP
+ *
+ * WHY:
+ * - Displays normalized price for easy comparison across sizes.
+ * - Allows sorting by cheapest per 100g/ml.
+ * - Highlights the cheapest product for quick identification.
+ *
+ * DESIGN LOGIC:
+ * - Simple grid layout, cards for each product.
+ * - Fetches data from backend /products endpoint.
+ * - Frontend handles client-side sorting for MVP.
+ */
+
+export default function App() {
+  const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+const [providerFilter, setProviderFilter] = useState('');
+const [adminOpen, setAdminOpen] = useState(false);
+
+
+  useEffect(() => {
+    // Fetch products from backend
+    axios.get('http://localhost:3000/products')
+      .then(res => setProducts(res.data))
+      .catch(err => console.error('Error fetching products', err))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const fetchFilteredProducts = () => {
+  setLoading(true);
+  axios.get('http://localhost:3000/products', {
+    params: {
+      q: searchQuery,
+      provider: providerFilter,
+      limit: 100
+    }
+  })
+  .then(res => setProducts(res.data))
+  .catch(err => console.error('Error fetching filtered products', err))
+  .finally(() => setLoading(false));
+};
+
+
+
+  // Compute the lowest normalized price for badge
+  const minNormalized = Math.min(
+    ...products.map(p => p.normalized_price || Infinity)
+  );
+
+  // Sort by normalized price (ascending)
+  const sortByCheapest = () => {
+    const sorted = [...products].sort((a, b) => {
+      if (!a.normalized_price) return 1;   // null values go to bottom
+      if (!b.normalized_price) return -1;
+      return a.normalized_price - b.normalized_price;
+    });
+    setProducts(sorted);
+  };
+
+  return (
+    <div style={{ fontFamily: 'system-ui, Arial, sans-serif', padding: 20 }}>
+      <h1>Sasta-Samaan — Price Compare (MVP)</h1>
+      <p style={{ color: '#666' }}>
+        Normalized price helps compare products across different pack sizes.
+      </p>
+
+      {adminOpen && (
+  <div style={{ position:'fixed', top:40, right:40, zIndex:2000, width:800 }}>
+    <Admin
+      onClose={() => setAdminOpen(false)}
+      onSaved={() => {
+        // re-run the same fetch the page uses (preserves current filters if you want)
+        // If you have fetchFilteredProducts defined, use it; otherwise call the initial fetch.
+        try {
+          fetchFilteredProducts(); // preferred if you implemented this
+        } catch (e) {
+          // fallback: refetch default list
+          axios.get('http://localhost:3000/products')
+            .then(res => setProducts(res.data))
+            .catch(err => console.error('Error refetching after admin save', err));
+        }
+      }}
+    />
+  </div>
+)}
+
+
+<div style={{ marginBottom: 16, display: 'flex', gap: 12, alignItems: 'center' }}>
+  <input
+    type="text"
+    placeholder="Search by name, brand, or category"
+    value={searchQuery}
+    onChange={(e) => setSearchQuery(e.target.value)}
+    onKeyDown={(e) => { if (e.key === 'Enter') fetchFilteredProducts(); }}
+    style={{ padding: '6px 10px', borderRadius: 6, border: '1px solid #ccc', flex: 1 }}
+  />
+
+  <select
+    value={providerFilter}
+    onChange={(e) => setProviderFilter(e.target.value)}
+    style={{ padding: '6px 10px', borderRadius: 6, border: '1px solid #ccc' }}
+  >
+    <option value="">All Providers</option>
+    <option value="ExampleProviderA">ExampleProviderA</option>
+    <option value="ExampleProviderB">ExampleProviderB</option>
+  </select>
+
+  <button
+    onClick={fetchFilteredProducts}
+    style={{ padding: '6px 12px', borderRadius: 6, border: '1px solid #ccc', cursor: 'pointer' }}
+  >
+    Apply
+  </button>
+</div>
+
+      <button onClick={sortByCheapest} style={{ marginBottom: 20, padding: '6px 12px', borderRadius: 6, border: '1px solid #ccc', cursor: 'pointer' }}>
+        Sort by Cheapest (per 100g/ml)
+      </button>
+
+<button onClick={() => setAdminOpen(true)} style={{ marginLeft: 8 }}>Open Admin</button>
+
+      {loading ? (
+        <div>Loading...</div>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: 16 }}>
+          {products.map(p => (
+            <div key={p.listing_id} style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: 12, position: 'relative' }}>
+              {p.normalized_price === minNormalized && (
+                <div style={{ position: 'absolute', top: 8, right: 8, backgroundColor: '#ffeb3b', padding: '2px 6px', borderRadius: 4, fontSize: 10, fontWeight: 600 }}>
+                  Cheapest
+                </div>
+              )}
+              <div style={{ fontWeight: 600 }}>{p.name}</div>
+              <div style={{ fontSize: 13, color: '#555' }}>{p.brand} • {p.unit}</div>
+              <div style={{ marginTop: 8, fontSize: 18, fontWeight: 700 }}>₹{p.price}</div>
+              {p.normalized_price ? (
+                <div style={{ marginTop: 6, fontSize: 12, color: '#007bff' }}>
+                  ₹{p.normalized_price} / {p.normalized_unit === 'per_100g' ? '100g' : '100ml'}
+                </div>
+              ) : (
+                <div style={{ marginTop: 6, fontSize: 12, color: '#888' }}>Normalized Price: N/A</div>
+              )}
+              <div style={{ marginTop: 8, fontSize: 12, color: '#888' }}>Provider: {p.provider}</div>
+              <div style={{ marginTop: 6, fontSize: 11, color: '#aaa' }}>Fetched at: {new Date(p.fetched_at).toLocaleString()}</div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}

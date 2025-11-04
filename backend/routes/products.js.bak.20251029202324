@@ -1,0 +1,91 @@
+const express = require('express');
+const router = express.Router();
+const path = require('path');
+const fs = require('fs');
+
+const { fetchZeptoProducts } = require('../providers/zepto');
+const { fetchBlinkitProducts } = require('../providers/blinkit');
+const { fetchSwiggyProducts } = require('../providers/swiggy');
+
+/**
+ * Helper: normalize fetched listing (ensure listing_id, product_id, price, unit)
+ */
+function normalizeListing(l) {
+  return {
+    listing_id: l.listing_id ?? l.id ?? null,
+    product_id: l.product_id ?? null,
+    name: l.name ?? l.raw_name ?? 'Unknown',
+    brand: l.brand ?? null,
+    provider: l.provider ?? 'unknown',
+    price: Number(l.price) || null,
+    unit: l.unit ?? null,
+    normalized_price: l.normalized_price ?? null,
+    normalized_unit: l.normalized_unit ?? null,
+    fetched_at: l.fetched_at ?? new Date().toISOString(),
+    url: l.url ?? null,
+    raw: l
+  };
+}
+
+router.get('/', async (req, res) => {
+  try {
+    const category = req.query.category || 'grocery';
+    // read local seed (products.json) if exists
+    let local = [];
+    try {
+      const raw = fs.readFileSync(path.join(__dirname,'..','products.json'), 'utf8');
+      local = JSON.parse(raw);
+    } catch (e) {
+      // ignore if no file
+    }
+
+    // call providers in parallel
+    const [zRes, bRes, sRes] = await Promise.all([
+      fetchZeptoProducts(category).catch(()=>[]),
+      fetchBlinkitProducts(category).catch(()=>[]),
+      fetchSwiggyProducts(category).catch(()=>[])
+    ]);
+
+    // merge all listings (local + providers)
+    const all = [...local, ...zRes, ...bRes, ...sRes].map(normalizeListing);
+
+    // group by product key: prefer product_id, fallback to name (lowercased)
+    const groups = {};
+    all.forEach(item => {
+      const key = item.product_id ? `pid_${item.product_id}` : `name_${(item.name||'').toLowerCase().trim()}`;
+      if (!groups[key]) {
+        groups[key] = {
+          product_id: item.product_id,
+          name: item.name,
+          brand: item.brand,
+          unit: item.unit,
+          listings: []
+        };
+      }
+      groups[key].listings.push({
+        listing_id: item.listing_id,
+        provider: item.provider,
+        price: item.price,
+        unit: item.unit,
+        normalized_price: item.normalized_price,
+        normalized_unit: item.normalized_unit,
+        fetched_at: item.fetched_at,
+        url: item.url,
+        raw: item.raw
+      });
+    });
+
+    // convert to array and sort listings by price ascending inside each group
+    const result = Object.values(groups).map(g => {
+      g.listings = g.listings.sort((a,b) => (Number(a.price)||Infinity) - (Number(b.price)||Infinity));
+      return g;
+    });
+
+    res.json(result);
+  } catch (err) {
+    console.error('products route error', err);
+    res.status(500).json({ error: 'server_error' });
+  }
+});
+
+module.exports = router;

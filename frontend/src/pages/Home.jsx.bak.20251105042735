@@ -1,0 +1,189 @@
+import React, { useEffect, useState, useMemo } from 'react';
+import api from '../api';
+import ProductCard from '../components/ProductCard';
+import SearchBar from '../components/SearchBar';
+
+/**
+ * Improved grouping:
+ * - canonical product key uses product_id if available
+ * - otherwise uses normalized brand + name + normalized unit
+ */
+
+function normalizeText(s = '') {
+  return (s || '').toString().trim().toLowerCase().replace(/[\u2018\u2019\u201c\u201d"]/g, '').replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+// normalize unit into a canonical short form (e.g. "5 kg" -> "5000g" or "5kg" -> "5kg")
+// For grouping we convert to highest-level readable form: if grams or kg appear, prefer grams numeric + unit
+function normalizeUnit(unit = '', name = '') {
+  const u = (unit || '').toString().trim().toLowerCase();
+  const combined = `${u} ${name || ''}`.toLowerCase();
+
+  // find patterns like "5 kg", "5kg", "500 g", "400g", "400 g", "1 kg", "1kg", "2 × 250 g"
+  const rx = /(\d+(?:[\.,]\d+)?)\s*(kg|g|gm|gram|grams|ml|l|ltr|litre|litres|nos|pcs|piece|pieces|pc)\b/;
+  const m = combined.match(rx);
+  if (m) {
+    let num = Number(m[1].toString().replace(',', '.'));
+    const unitText = m[2];
+    if (/kg|kilogram/.test(unitText)) {
+      // convert to grams for canonical numeric match
+      return `${(num * 1000)}g`;
+    }
+    if (/g|gm|gram/.test(unitText)) {
+      return `${num}g`;
+    }
+    if (/ml|l|ltr|litre/.test(unitText)) {
+      if (/l|ltr|litre/.test(unitText)) return `${(num * 1000)}ml`;
+      return `${num}ml`;
+    }
+    // fallthrough generic
+    return `${num}${unitText}`;
+  }
+
+  // fallback: strip spaces and punctuation
+  if (u) return u.replace(/\s+/g, '');
+  // also try to find size in name like "400 g" in product title
+  const m2 = (name || '').toLowerCase().match(rx);
+  if (m2) {
+    let num = Number(m2[1].toString().replace(',', '.'));
+    const unitText = m2[2];
+    if (/kg|kilogram/.test(unitText)) return `${(num * 1000)}g`;
+    if (/g|gm|gram/.test(unitText)) return `${num}g`;
+    if (/ml|l|ltr|litre/.test(unitText)) return /l|ltr|litre/.test(unitText) ? `${(num * 1000)}ml` : `${num}ml`;
+    return `${num}${unitText}`;
+  }
+
+  return '';
+}
+
+function canonicalProductKey(item) {
+  if (item.product_id) return String(item.product_id);
+  const brand = normalizeText(item.brand || '');
+  const name = normalizeText(item.name || item.raw && item.raw.name || '');
+  const unit = normalizeUnit(item.unit, item.name || item.raw && item.raw.name || '');
+  // keep only first 6-8 words of the name to avoid extremely long keys
+  const nameShort = name.split(' ').slice(0, 8).join(' ');
+  return `${brand}||${nameShort}||${unit}`.replace(/\s+/g, ' ').trim();
+}
+
+export default function Home() {
+  const [q, setQ] = useState('');
+  const [productsRaw, setProductsRaw] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [providerFilter, setProviderFilter] = useState({});
+
+  async function fetchProducts() {
+    setLoading(true);
+    try {
+      const params = {};
+      if (q) params.q = q;
+      const res = await api.get('/products', { params });
+      const flat = Array.isArray(res.data) ? res.data : [];
+      setProductsRaw(flat);
+      // derive providers present and initialize filter if empty
+      const provs = Array.from(new Set(flat.map(x => x.provider).filter(Boolean)));
+      setProviderFilter(prev => {
+        const next = {};
+        provs.forEach(p => { next[p] = prev.hasOwnProperty(p) ? prev[p] : true; });
+        return next;
+      });
+    } catch (e) {
+      console.error('fetchProducts error', e);
+      setProductsRaw([]);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => { fetchProducts(); }, []);
+
+  const grouped = useMemo(() => {
+    const map = {};
+    productsRaw.forEach(item => {
+      const key = canonicalProductKey(item);
+      if (!map[key]) {
+        map[key] = {
+          product_id: item.product_id || key,
+          name: item.name || (item.raw && item.raw.name) || 'Unknown',
+          brand: item.brand || '',
+          unit: item.unit || '',
+          listings: []
+        };
+      }
+      map[key].listings.push({
+        listing_id: item.listing_id ?? item.id ?? null,
+        provider: item.provider || 'Unknown',
+        price: item.price,
+        unit: item.unit,
+        normalized_price: item.normalized_price ?? null,
+        normalized_unit: item.normalized_unit ?? null,
+        fetched_at: item.fetched_at ?? null,
+        link: item.url ?? item.link ?? null,
+        raw: item
+      });
+    });
+    // convert map to array and sort by name
+    return Object.values(map).sort((a,b) => (a.name || '').localeCompare(b.name || ''));
+  }, [productsRaw]);
+
+  const providers = useMemo(() => {
+    const s = new Set();
+    productsRaw.forEach(p => { if (p.provider) s.add(p.provider); });
+    return Array.from(s).sort();
+  }, [productsRaw]);
+
+  function toggleProvider(provider) {
+    setProviderFilter(prev => ({ ...prev, [provider]: !prev[provider] }));
+  }
+
+  const filteredProducts = useMemo(() => {
+    return grouped.map(prod => ({
+      ...prod,
+      listings: prod.listings.filter(l => providerFilter[l.provider])
+    })).filter(p => p.listings.length > 0);
+  }, [grouped, providerFilter]);
+
+  return (
+    <div className="app-container" style={{ paddingTop: 8 }}>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:12, marginBottom:12 }}>
+        <div style={{ display:'flex', gap:12, alignItems:'center' }}>
+          <div style={{ fontWeight:700, fontSize:20 }}>Sasta-Samaan</div>
+          <div style={{ color:'#6b7280' }}>Price compare MVP</div>
+        </div>
+
+        <div style={{ display:'flex', gap:8, alignItems:'center' }}>
+          <div style={{ display:'flex', gap:8, alignItems:'center' }}>
+            <SearchBar value={q} onChange={setQ} onEnter={fetchProducts} />
+            <button onClick={fetchProducts} style={{ padding:'8px 10px', borderRadius:8 }}>Search</button>
+          </div>
+        </div>
+      </div>
+
+      <div style={{ display:'flex', gap:16, marginBottom:12, alignItems:'center', flexWrap:'wrap' }}>
+        <div style={{ fontWeight:700 }}>Providers</div>
+        {providers.length === 0 ? <div style={{ color:'#9ca3af' }}>No providers</div> : providers.map(p => (
+          <label key={p} style={{ display:'inline-flex', alignItems:'center', gap:8, cursor:'pointer', userSelect:'none' }}>
+            <input type="checkbox" checked={!!providerFilter[p]} onChange={() => toggleProvider(p)} />
+            <span style={{ fontSize:14 }}>{p}</span>
+          </label>
+        ))}
+        <button onClick={() => {
+          const all = {};
+          providers.forEach(p => all[p] = true);
+          setProviderFilter(all);
+        }} style={{ marginLeft:12 }}>Select all</button>
+        <button onClick={() => {
+          const none = {};
+          providers.forEach(p => none[p] = false);
+          setProviderFilter(none);
+        }}>Clear</button>
+      </div>
+
+      {loading ? <div>Loading products...</div> : (
+        <div className="product-grid" style={{ marginBottom: 32 }}>
+          {filteredProducts.map(p => <ProductCard key={p.product_id || p.name} product={p} />)}
+        </div>
+      )}
+    </div>
+  );
+}
