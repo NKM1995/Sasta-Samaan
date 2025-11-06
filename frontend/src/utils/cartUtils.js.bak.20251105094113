@@ -1,8 +1,9 @@
 /**
  * src/utils/cartUtils.js
- * - Loads/saves per-provider carts in localStorage
- * - Migrates existing stored keys to canonical provider keys on load
- * - Emits window event 'sasta:cart:changed' on every mutation
+ * Persistent per-provider carts using localStorage.
+ * Now:
+ * - Uses canonical provider keys via providerUtils
+ * - Emits a global window event 'sasta:cart:changed' after every mutation
  */
 
 import { canonicalKey } from './providerUtils';
@@ -13,42 +14,12 @@ function defaultCarts() {
   return { zepto: [], blinkit: [], instamart: [], bigbasket: [], jiomart: [], dmart: [], swiggy: [] };
 }
 
-// Merge two arrays of cart items by product_id (keep first occurrence)
-function mergeItemArrays(a = [], b = []) {
-  const map = {};
-  (a || []).forEach(item => { map[String(item.product_id)] = item; });
-  (b || []).forEach(item => { if (!map[String(item.product_id)]) map[String(item.product_id)] = item; });
-  return Object.values(map);
-}
-
 export function loadCarts() {
   try {
     const raw = localStorage.getItem(CART_KEY);
     if (!raw) return defaultCarts();
     const parsed = JSON.parse(raw);
-
-    // Migration: canonicalize keys
-    const migrated = {};
-    Object.keys(parsed || {}).forEach(origKey => {
-      try {
-        const canonical = canonicalKey(origKey || '');
-        const arr = Array.isArray(parsed[origKey]) ? parsed[origKey] : [];
-        if (!migrated[canonical]) migrated[canonical] = [];
-        migrated[canonical] = mergeItemArrays(migrated[canonical], arr);
-      } catch (e) {
-        // on error, drop that key
-        console.warn('cartUtils: migration failed for key', origKey, e && e.message);
-      }
-    });
-
-    // ensure every default provider exists
-    const defaults = defaultCarts();
-    Object.keys(defaults).forEach(k => { if (!migrated[k]) migrated[k] = []; });
-
-    // remove empty providers (optional: leave them, but easier to reason if kept)
-    // we'll keep defaults but ensure shape stable
-    localStorage.setItem(CART_KEY, JSON.stringify(migrated));
-    return migrated;
+    return { ...defaultCarts(), ...parsed };
   } catch (e) {
     console.warn('loadCarts error', e);
     return defaultCarts();
@@ -58,6 +29,7 @@ export function loadCarts() {
 function saveToStorage(carts) {
   try {
     localStorage.setItem(CART_KEY, JSON.stringify(carts));
+    // notify listeners
     try { window.dispatchEvent(new CustomEvent('sasta:cart:changed')); } catch(e) {}
   } catch (e) {
     console.warn('saveCarts error', e);

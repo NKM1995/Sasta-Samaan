@@ -1,0 +1,149 @@
+{
+  "generated_at": "2025-11-06T14:33:10.379Z",
+  "data": [
+    {
+      "listing_id": "zepto-1001",
+      "product_id": "A1",
+      "name": "Aashirvaad Atta 5 kg",
+      "brand": "Aashirvaad",
+      "category": "grocery",
+      "provider": "Zepto",
+      "price": 399,
+      "unit": "5 kg",
+      "fetched_at": "2025-11-06T14:33:10.373Z",
+      "url": "https://zepto.example/ashirvaad-5kg"
+    },
+    {
+      "listing_id": "zepto-1002",
+      "product_id": "A2",
+      "name": "Tata Salt 1 kg",
+      "brand": "Tata",
+      "category": "grocery",
+      "provider": "Zepto",
+      "price": 32,
+      "unit": "1 kg",
+      "fetched_at": "2025-11-06T14:33:10.377Z",
+      "url": "https://zepto.example/tata-salt-1kg"
+    },
+    {
+      "listing_id": "blinkit-2001",
+      "product_id": "A1",
+      "name": "Aashirvaad Atta 5 kg",
+      "brand": "Aashirvaad",
+      "category": "grocery",
+      "provider": "Blinkit",
+      "price": 405,
+      "unit": "5 kg",
+      "fetched_at": "2025-11-06T14:33:10.377Z",
+      "url": "https://blinkit.example/aashirvaad-5kg"
+    },
+    {
+      "listing_id": "blinkit-2002",
+      "product_id": "A3",
+      "name": "Parle-G Biscuit 400 g",
+      "brand": "Parle",
+      "category": "grocery",
+      "provider": "Blinkit",
+      "price": 48,
+      "unit": "400 g",
+      "fetched_at": "2025-11-06T14:33:10.377Z",
+      "url": "https://blinkit.example/parle-g-400g"
+    },
+    {
+      "listing_id": "insta-3001",
+      "product_id": "A2",
+      "name": "Tata Salt 1 kg",
+      "brand": "Tata",
+      "category": "grocery",
+      "provider": "Instamart",
+      "price": 30,
+      "unit": "1 kg",
+      "fetched_at": "2025-11-06T14:33:10.377Z",
+      "url": "https://instamart.example/tata-salt-1kg"
+    },
+    {
+      "listing_id": "insta-3002",
+      "product_id": "A4",
+      "name": "Daawat Jasmine Rice 5 kg",
+      "brand": "Daawat",
+      "category": "grocery",
+      "provider": "Instamart",
+      "price": 495,
+      "unit": "5 kg",
+      "fetched_at": "2025-11-06T14:33:10.377Z",
+      "url": "https://instamart.example/daawat-5kg"
+    },
+    {
+      "listing_id": "bb-4001",
+      "product_id": "A1",
+      "name": "Aashirvaad Atta 5 kg",
+      "brand": "Aashirvaad",
+      "category": "grocery",
+      "provider": "BigBasket",
+      "price": 398,
+      "unit": "5 kg",
+      "fetched_at": "2025-11-06T14:33:10.377Z",
+      "url": "https://bigbasket.example/aashirvaad-5kg"
+    },
+    {
+      "listing_id": "bb-4002",
+      "product_id": "A3",
+      "name": "Parle-G Biscuit 400 g",
+      "brand": "Parle",
+      "category": "grocery",
+      "provider": "BigBasket",
+      "price": 50,
+      "unit": "400 g",
+      "fetched_at": "2025-11-06T14:33:10.377Z",
+      "url": "https://bigbasket.example/parle-g-400g"
+    },
+    {
+      "listing_id": "jm-5001",
+      "product_id": "A4",
+      "name": "Daawat Jasmine Rice 5 kg",
+      "brand": "Daawat",
+      "category": "grocery",
+      "provider": "JioMart",
+      "price": 500,
+      "unit": "5 kg",
+      "fetched_at": "2025-11-06T14:33:10.377Z",
+      "url": "https://jiomart.example/daawat-5kg"
+    },
+    {
+      "listing_id": "jm-5002",
+      "product_id": "A5",
+      "name": "Maggi Noodles 2 min 70 g",
+      "brand": "Maggi",
+      "category": "grocery",
+      "provider": "JioMart",
+      "price": 12,
+      "unit": "70 g",
+      "fetched_at": "2025-11-06T14:33:10.377Z",
+      "url": "https://jiomart.example/maggi-70g"
+    },
+    {
+      "listing_id": "dm-6001",
+      "product_id": "A3",
+      "name": "Parle-G Biscuit 400 g",
+      "brand": "Parle",
+      "category": "grocery",
+      "provider": "Dmart",
+      "price": 49,
+      "unit": "400 g",
+      "fetched_at": "2025-11-06T14:33:10.377Z",
+      "url": "https://dmart.example/parle-g-400g"
+    },
+    {
+      "listing_id": "dm-6002",
+      "product_id": "A5",
+      "name": "Maggi Noodles 2 min 70 g",
+      "brand": "Maggi",
+      "category": "grocery",
+      "provider": "Dmart",
+      "price": 13,
+      "unit": "70 g",
+      "fetched_at": "2025-11-06T14:33:10.377Z",
+      "url": "https://dmart.example/maggi-70g"
+    }
+  ]
+}

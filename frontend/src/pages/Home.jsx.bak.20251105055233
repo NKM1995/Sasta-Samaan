@@ -5,14 +5,17 @@ import SearchBar from '../components/SearchBar';
 import { canonicalKey as canonicalProviderKey, displayName as providerDisplayName } from '../utils/providerUtils';
 
 /**
- * Home.jsx with:
- * - providerFilter persisted to localStorage (key: sasta_provider_filter)
- * - "Only show cheapest per product" toggle persisted to localStorage (key: sasta_show_cheapest)
+ * Home.jsx with an additional mergeSimilarGroups pass to reduce near-duplicate product cards.
+ *
+ * Heuristic:
+ * - brand must match (or one missing)
+ * - normalized unit must match (or both missing)
+ * - name similarity (token Jaccard) >= SIM_THRESHOLD (0.65)
+ *
+ * If groups are merged, their listings arrays are combined (then dedup per provider).
  */
 
-const FILTER_STORAGE_KEY = 'sasta_provider_filter';
-const SHOW_CHEAP_KEY = 'sasta_show_cheapest';
-const SIM_THRESHOLD = 0.65;
+const SIM_THRESHOLD = 0.65; // tune this: raise to be stricter, lower to be more aggressive
 
 function normalizeText(s = '') {
   return (s || '').toString().trim().toLowerCase()
@@ -21,15 +24,24 @@ function normalizeText(s = '') {
     .trim();
 }
 
-/* utility functions: stripParentheses, removeBrandFromName, normalizeUnit, normalizeProductName, tokensOf, jaccardSimilarity, canonicalProductKey
-   (same logic as earlier version) - omitted here for brevity but retained in functionality.
-   To keep file concise in this paste, we re-use the previously defined robust canonicalProductKey implementation.
-   (You already have the version from the previous file; this file continues to use it.)
-*/
+function stripParentheses(s = '') {
+  return (s || '').replace(/\((.*?)\)/g, ' ').replace(/\[(.*?)\]/g, ' ').replace(/\s+/g, ' ').trim();
+}
 
-// --- For brevity we will import the canonicalKey building logic inline (kept compact) ---
-function stripParentheses(s = '') { return (s || '').replace(/\((.*?)\)/g, ' ').replace(/\[(.*?)\]/g, ' ').replace(/\s+/g, ' ').trim(); }
-function removeBrandFromName(name = '', brand = '') { if (!name) return name; let n = name.toString(); if (brand) { const b = brand.toString().trim(); if (b) { const re = new RegExp(b.replace(/[-/\\^$*+?.()|[\]{}]/g,'\\$&'), 'ig'); n = n.replace(re, ' '); } } n = n.replace(/\b(by|from|brand|brand:)\b/ig, ' '); return n.replace(/\s+/g, ' ').trim(); }
+function removeBrandFromName(name = '', brand = '') {
+  if (!name) return name;
+  let n = name.toString();
+  if (brand) {
+    const b = brand.toString().trim();
+    if (b) {
+      const re = new RegExp(b.replace(/[-/\\^$*+?.()|[\]{}]/g,'\\$&'), 'ig');
+      n = n.replace(re, ' ');
+    }
+  }
+  n = n.replace(/\b(by|from|brand|brand:)\b/ig, ' ');
+  return n.replace(/\s+/g, ' ').trim();
+}
+
 function normalizeUnit(unit = '', name = '') {
   const combined = `${unit || ''} ${name || ''}`.toLowerCase();
   const rx = /(\d+(?:[.,]\d+)?)\s*(kg|kgs|kilogram|kilograms|g|gm|gram|grams|ml|l|ltr|litre|litres|pcs|pc|piece|pieces)\b/;
@@ -56,6 +68,7 @@ function normalizeUnit(unit = '', name = '') {
   }
   return '';
 }
+
 function normalizeProductName(name = '', brand = '') {
   if (!name) return '';
   let n = name.toString();
@@ -68,6 +81,23 @@ function normalizeProductName(name = '', brand = '') {
   const parts = n.split(' ').slice(0, 10);
   return parts.join(' ').trim();
 }
+
+function tokensOf(s = '') {
+  if (!s) return [];
+  return s.split(/\s+/).filter(Boolean);
+}
+
+function jaccardSimilarity(a = '', b = '') {
+  const ta = new Set(tokensOf(a));
+  const tb = new Set(tokensOf(b));
+  if (ta.size === 0 && tb.size === 0) return 1;
+  if (ta.size === 0 || tb.size === 0) return 0;
+  let inter = 0;
+  for (const x of ta) if (tb.has(x)) inter++;
+  const union = new Set([...ta, ...tb]).size;
+  return inter / union;
+}
+
 function canonicalProductKey(item) {
   if (item.product_id) return String(item.product_id);
   const brand = normalizeText(item.brand || '');
@@ -76,42 +106,67 @@ function canonicalProductKey(item) {
   return `${brand}||${nameNorm}||${unitNorm}`.replace(/\s+/g, ' ').trim();
 }
 
+/**
+ * Merge groups if similar by brand, unit and name similarity threshold.
+ * Returns new array of groups where each group's listings are combined.
+ */
+function mergeSimilarGroups(groups) {
+  const merged = [];
+  const used = new Array(groups.length).fill(false);
+
+  for (let i = 0; i < groups.length; i++) {
+    if (used[i]) continue;
+    const base = { ...groups[i], listings: [...groups[i].listings] };
+    used[i] = true;
+
+    for (let j = i + 1; j < groups.length; j++) {
+      if (used[j]) continue;
+      const aBrand = normalizeText(base.brand || '');
+      const bBrand = normalizeText(groups[j].brand || '');
+      // allow match if brands equal OR one is empty
+      const brandOk = (!aBrand && !bBrand) || (aBrand === bBrand) || (!aBrand) || (!bBrand);
+
+      const aUnit = (base.unit || '').toString().trim();
+      const bUnit = (groups[j].unit || '').toString().trim();
+      const unitOk = (!aUnit && !bUnit) || (aUnit === bUnit);
+
+      const aName = normalizeProductName(base.name || '', base.brand || '');
+      const bName = normalizeProductName(groups[j].name || '', groups[j].brand || '');
+      const sim = jaccardSimilarity(aName, bName);
+
+      if (brandOk && unitOk && sim >= SIM_THRESHOLD) {
+        // merge j into base
+        base.listings = base.listings.concat(groups[j].listings);
+        used[j] = true;
+        console.debug(`MERGE: "${base.name}" <= "${groups[j].name}" (sim=${sim.toFixed(2)})`);
+      }
+    }
+
+    // after merging, dedupe per provider (keep cheapest)
+    const byProv = {};
+    base.listings.forEach(l => {
+      const key = (l.provider_key || (l.provider || '')).toString().toLowerCase().replace(/\s+/g,'');
+      if (!byProv[key]) byProv[key] = [];
+      byProv[key].push(l);
+    });
+    const deduped = [];
+    Object.values(byProv).forEach(arr => {
+      let chosen = arr[0];
+      arr.forEach(a => { if (Number(a.price) < Number(chosen.price)) chosen = a; });
+      deduped.push(chosen);
+    });
+    base.listings = deduped;
+    merged.push(base);
+  }
+
+  return merged;
+}
+
 export default function Home() {
   const [q, setQ] = useState('');
   const [productsRaw, setProductsRaw] = useState([]);
   const [loading, setLoading] = useState(true);
-
-  // initialize providerFilter from localStorage or empty (will be populated after fetch)
-  const [providerFilter, setProviderFilter] = useState(() => {
-    try {
-      const raw = localStorage.getItem(FILTER_STORAGE_KEY);
-      if (!raw) return {};
-      const parsed = JSON.parse(raw);
-      return parsed || {};
-    } catch (e) {
-      return {};
-    }
-  });
-
-  // showCheapest persisted
-  const [showCheapest, setShowCheapest] = useState(() => {
-    try {
-      const raw = localStorage.getItem(SHOW_CHEAP_KEY);
-      return raw === 'true';
-    } catch (e) {
-      return false;
-    }
-  });
-
-  // save providerFilter whenever it changes
-  useEffect(() => {
-    try { localStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify(providerFilter)); } catch (e) {}
-  }, [providerFilter]);
-
-  // save showCheapest whenever it changes
-  useEffect(() => {
-    try { localStorage.setItem(SHOW_CHEAP_KEY, showCheapest ? 'true' : 'false'); } catch (e) {}
-  }, [showCheapest]);
+  const [providerFilter, setProviderFilter] = useState({});
 
   async function fetchProducts() {
     setLoading(true);
@@ -121,7 +176,6 @@ export default function Home() {
       const res = await api.get('/products', { params });
       let flat = Array.isArray(res.data) ? res.data : [];
 
-      // canonicalize provider & compute normalized_unit
       flat = flat.map(it => {
         const incomingProvider = it.provider || 'unknown';
         const canonicalProvKey = canonicalProviderKey(incomingProvider);
@@ -137,20 +191,10 @@ export default function Home() {
 
       setProductsRaw(flat);
 
-      // derive providers and merge with stored filter if any
-      const provs = Array.from(new Set(flat.map(x => x.provider).filter(Boolean))).sort();
+      const provs = Array.from(new Set(flat.map(x => x.provider).filter(Boolean)));
       setProviderFilter(prev => {
-        // If prev is empty (first load) and storage had nothing, initialize all true
-        if (!prev || Object.keys(prev).length === 0) {
-          const all = {};
-          provs.forEach(p => all[p] = true);
-          return all;
-        }
-        // ensure any newly discovered provider defaults to true
-        const next = { ...prev };
-        provs.forEach(p => { if (!next.hasOwnProperty(p)) next[p] = true; });
-        // remove providers that no longer exist
-        Object.keys(next).forEach(k => { if (!provs.includes(k)) delete next[k]; });
+        const next = {};
+        provs.forEach(p => { next[p] = prev.hasOwnProperty(p) ? prev[p] : true; });
         return next;
       });
     } catch (e) {
@@ -163,7 +207,6 @@ export default function Home() {
 
   useEffect(() => { fetchProducts(); }, []);
 
-  // grouping (same as previous) + merge pass; re-use canonicalProductKey
   const grouped = useMemo(() => {
     const map = {};
     productsRaw.forEach(item => {
@@ -191,57 +234,11 @@ export default function Home() {
       });
     });
 
-    // convert to array
     let groups = Object.values(map).sort((a,b) => (a.name || '').localeCompare(b.name || ''));
 
-    // mergeSimilarGroups (kept same logic as earlier file) - inline for continuity
-    const merged = [];
-    const used = new Array(groups.length).fill(false);
-    for (let i = 0; i < groups.length; i++) {
-      if (used[i]) continue;
-      const base = { ...groups[i], listings: [...groups[i].listings] };
-      used[i] = true;
-      for (let j = i + 1; j < groups.length; j++) {
-        if (used[j]) continue;
-        const aBrand = normalizeText(base.brand || '');
-        const bBrand = normalizeText(groups[j].brand || '');
-        const brandOk = (!aBrand && !bBrand) || (aBrand === bBrand) || (!aBrand) || (!bBrand);
-        const aUnit = (base.unit || '').toString().trim();
-        const bUnit = (groups[j].unit || '').toString().trim();
-        const unitOk = (!aUnit && !bUnit) || (aUnit === bUnit);
-        const aName = normalizeProductName(base.name || '', base.brand || '');
-        const bName = normalizeProductName(groups[j].name || '', groups[j].brand || '');
-        // jaccard similarity
-        const ta = new Set((aName || '').split(/\s+/).filter(Boolean));
-        const tb = new Set((bName || '').split(/\s+/).filter(Boolean));
-        let inter = 0;
-        for (const x of ta) if (tb.has(x)) inter++;
-        const union = new Set([...ta, ...tb]).size;
-        const sim = union === 0 ? 0 : inter / union;
-        if (brandOk && unitOk && sim >= SIM_THRESHOLD) {
-          base.listings = base.listings.concat(groups[j].listings);
-          used[j] = true;
-          console.debug(`MERGE: "${base.name}" <= "${groups[j].name}" (sim=${sim.toFixed(2)})`);
-        }
-      }
-      // dedupe per provider (pick cheapest)
-      const byProv = {};
-      base.listings.forEach(l => {
-        const key = (l.provider_key || (l.provider || '')).toString().toLowerCase().replace(/\s+/g,'');
-        if (!byProv[key]) byProv[key] = [];
-        byProv[key].push(l);
-      });
-      const deduped = [];
-      Object.values(byProv).forEach(arr => {
-        let chosen = arr[0];
-        arr.forEach(a => { if (Number(a.price) < Number(chosen.price)) chosen = a; });
-        deduped.push(chosen);
-      });
-      base.listings = deduped;
-      merged.push(base);
-    }
+    // Merge similar groups (aggressive dedupe pass)
+    groups = mergeSimilarGroups(groups);
 
-    groups = merged;
     return groups;
   }, [productsRaw]);
 
@@ -296,18 +293,11 @@ export default function Home() {
           providers.forEach(p => none[p] = false);
           setProviderFilter(none);
         }}>Clear</button>
-
-        <div style={{ marginLeft: 'auto', display:'flex', alignItems:'center', gap:8 }}>
-          <label style={{ display:'inline-flex', alignItems:'center', gap:8 }}>
-            <input type="checkbox" checked={!!showCheapest} onChange={() => setShowCheapest(s => !s)} />
-            <span style={{ fontSize:14 }}>Only show cheapest per product</span>
-          </label>
-        </div>
       </div>
 
       {loading ? <div>Loading products...</div> : (
         <div className="product-grid" style={{ marginBottom: 32 }}>
-          {filteredProducts.map(p => <ProductCard key={p.product_id || p.name} product={p} showOnlyCheapest={showCheapest} />)}
+          {filteredProducts.map(p => <ProductCard key={p.product_id || p.name} product={p} />)}
         </div>
       )}
     </div>
